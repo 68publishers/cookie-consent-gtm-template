@@ -1,0 +1,56 @@
+name: Sync template
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [cookie-consent-released]
+
+permissions:
+  contents: write
+
+env:
+  SOURCE_REPO: 68publishers/cookie-consent
+  SOURCE_FILE: gtm_template.tpl
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve latest release of the source repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "TAG=$(gh release view --repo $SOURCE_REPO --json tagName -q .tagName)" >> $GITHUB_ENV
+
+      - name: Download the template
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/$SOURCE_REPO/$TAG/$SOURCE_FILE" -o template.tpl
+          grep -q '"categories"' template.tpl || { echo "::error::$SOURCE_FILE is missing the categories entry required by the Gallery"; exit 1; }
+
+      - name: Commit the template
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- template.tpl; then
+            echo "Template is already up to date."
+            echo "SKIP=1" >> $GITHUB_ENV
+            exit 0
+          fi
+          git commit -m "chore: sync template from $TAG" -- template.tpl
+          git push
+          echo "SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
+
+      # The Gallery publishes only the commits listed here, newest first.
+      - name: Record the version in metadata.yaml
+        if: env.SKIP != '1'
+        run: |
+          awk -v sha="$SHA" -v tag="$TAG" -v repo="$SOURCE_REPO" '
+            { print }
+            /^versions:$/ && !done {
+              printf "  - sha: \"%s\"\n    changeNotes: \"%s - https://github.com/%s/releases/tag/%s\"\n", sha, tag, repo, tag
+              done = 1
+            }
+          ' metadata.yaml > metadata.yaml.tmp && mv metadata.yaml.tmp metadata.yaml
+          git commit -m "chore: record $TAG in metadata.yaml" -- metadata.yaml
+          git push
