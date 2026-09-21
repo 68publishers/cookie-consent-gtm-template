@@ -18,10 +18,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve latest release of the source repository
+      # A release dispatch names its own tag; a manual run falls back to the latest release.
+      - name: Resolve the release to sync
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "TAG=$(gh release view --repo $SOURCE_REPO --json tagName -q .tagName)" >> $GITHUB_ENV
+          PAYLOAD_TAG: ${{ github.event.client_payload.tag }}
+        run: |
+          TAG="${PAYLOAD_TAG:-$(gh release view --repo $SOURCE_REPO --json tagName -q .tagName)}"
+          gh release view --repo $SOURCE_REPO "$TAG" --json tagName > /dev/null
+          echo "TAG=$TAG" >> $GITHUB_ENV
 
       - name: Download the template
         run: |
