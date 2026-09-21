@@ -1,3 +1,5 @@
 homepage: "https://github.com/68publishers/cookie-consent"
 documentation: "https://github.com/68publishers/cookie-consent#integration-into-the-gtm"
 versions:
+  - sha: "0cc9c7478580dc189302bede07e783037aebbc57"
+    changeNotes: "v1.4.1 - https://github.com/68publishers/cookie-consent/releases/tag/v1.4.1"
