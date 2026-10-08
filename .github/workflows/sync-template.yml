@@ -31,6 +31,7 @@ jobs:
       - name: Download the template
         run: |
           curl -fsSL "https://raw.githubusercontent.com/$SOURCE_REPO/$TAG/$SOURCE_FILE" -o template.tpl
+          curl -fsSL "https://raw.githubusercontent.com/$SOURCE_REPO/$TAG/CHANGELOG.md" -o "$RUNNER_TEMP/CHANGELOG.md"
           grep -q '"categories"' template.tpl || { echo "::error::$SOURCE_FILE is missing the categories entry required by the Gallery"; exit 1; }
 
       - name: Commit the template
@@ -47,15 +48,38 @@ jobs:
           echo "SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
       # The Gallery publishes only the commits listed here, newest first.
+      # The change notes are the "[Template]" entries of the release in the changelog.
       - name: Record the version in metadata.yaml
         if: env.SKIP != '1'
         run: |
-          awk -v sha="$SHA" -v tag="$TAG" -v repo="$SOURCE_REPO" '
-            { print }
-            /^versions:$/ && !done {
-              printf "  - sha: \"%s\"\n    changeNotes: \"%s - https://github.com/%s/releases/tag/%s\"\n", sha, tag, repo, tag
-              done = 1
-            }
-          ' metadata.yaml > metadata.yaml.tmp && mv metadata.yaml.tmp metadata.yaml
+          python3 - <<'EOF'
+          import os, re
+
+          tag = os.environ["TAG"]
+          version = tag.removeprefix("v")
+          url = f"https://github.com/{os.environ['SOURCE_REPO']}/releases/tag/{tag}"
+
+          notes, in_release = [], False
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "CHANGELOG.md"), encoding="utf-8") as f:
+              for line in f:
+                  if line.startswith("## "):
+                      in_release = line.startswith(f"## [{version}]")
+                  elif in_release:
+                      match = re.match(r"- \[Template\]\s+(.+)", line.strip())
+                      if match:
+                          notes.append(match.group(1))
+
+          if not notes:
+              print(f"::warning::The changelog of {tag} has no [Template] entries, using a generic change note.")
+              notes = [f"New release, see {url}"]
+
+          entry = f'  - sha: "{os.environ["SHA"]}"\n    changeNotes: |2\n' + "".join(f"      {note}\n" for note in notes)
+
+          with open("metadata.yaml", encoding="utf-8") as f:
+              metadata = f.read()
+
+          with open("metadata.yaml", "w", encoding="utf-8") as f:
+              f.write(metadata.replace("versions:\n", "versions:\n" + entry, 1))
+          EOF
           git commit -m "chore: record $TAG in metadata.yaml" -- metadata.yaml
           git push
