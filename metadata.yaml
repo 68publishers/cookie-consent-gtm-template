@@ -1,5 +1,8 @@
 homepage: "https://github.com/68publishers/cookie-consent"
 documentation: "https://github.com/68publishers/cookie-consent#integration-into-the-gtm"
 versions:
+  - sha: "a15f7db69f822846da0e2c8b6b8ec994d10c6348"
+    changeNotes: |2
+      Added the options `Push consent to the data layer as an event` and `Data layer event name`. If enabled, the consent state of all storages is pushed into the data layer as an event (`68publishers_consent` by default) after every `gtag('consent', 'default' | 'update', ...)` command.
   - sha: "0cc9c7478580dc189302bede07e783037aebbc57"
     changeNotes: "Initial release."
